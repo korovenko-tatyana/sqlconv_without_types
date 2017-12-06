@@ -18,9 +18,9 @@
     <property name="geometry">
      <rect>
       <x>380</x>
-      <y>60</y>
+      <y>10</y>
       <width>371</width>
-      <height>361</height>
+      <height>411</height>
      </rect>
     </property>
    </widget>
@@ -37,19 +37,6 @@
      <string>Go</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="download">
-    <property name="geometry">
-     <rect>
-      <x>540</x>
-      <y>20</y>
-      <width>80</width>
-      <height>25</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Download</string>
-    </property>
-   </widget>
    <widget class="QGroupBox" name="groupBox_4">
     <property name="geometry">
      <rect>
@@ -60,7 +47,7 @@
      </rect>
     </property>
     <property name="title">
-     <string>Выбор входной файл</string>
+     <string>Выборите входной файл</string>
     </property>
     <widget class="QLineEdit" name="table_name">
      <property name="geometry">
