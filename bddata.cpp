@@ -1,17 +1,14 @@
 #include "bddata.h"
-#include "mainwindow.h"
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QString>
 #include <QDialog>
 #include <QTextStream>
 #include <QDebug>
-QTextStream cout(stdout);
-#include <QSql>
+#include <QtSql>
 #include <QSqlRecord>
 #include <QFile>
-#include <QSqlQuery>
-#include <QSqlError>
+
 /*BDData::BDData()
 {
 
@@ -22,110 +19,161 @@ BDData::BDData(QObject *parent): QAbstractTableModel(parent)
 }
 QVariant BDData::data(const QModelIndex &index, int role) const
 {
-   // return QVariant();
+    if (role == Qt::DisplayRole)
+    {
+        if (!index.isValid())
+            return QVariant();
+
+        return data1.at(index.row()).at(index.column());
+    }
+
+    return QVariant();
+
 }
 
 int BDData::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid()) return 0;
     return rows;
-  /*  if (parent.isValid()) return 0;
-    return 1;//data1.count();*/
-
 }
 
 int BDData::columnCount(const QModelIndex &parent) const
 {
     if (parent.isValid()) return 0;
-    return cols;   
-  //  return 2;//column_name.count();
-}
-QVariant BDData::headerData(int section, Qt::Orientation orientation, int role) const //???
-{
- /*   if (role == Qt::DisplayRole){
-        if (orientation == Qt::Horizontal) {
-            for(int i=0;i<column_name.count();i++)
-            if (section == i) return column_name[i];  // "Time";
-           // else return "Difference";
-        }
-    }*/
-  //  return  QAbstractTableModel::headerData(section, orientation, role);
+    if (rows == 0)
+        return 0;
+    return cols;
 }
 
-void BDData::load_from_csv(QString file_name1){
-    if(cols!=0)
-    {
+QVariant BDData::headerData(int section, Qt::Orientation orientation, int role) const
+{ if (role == Qt::DisplayRole)
+    { if (orientation == Qt::Horizontal)
+        { return column_name[section];
+        } }
+    return QAbstractTableModel::headerData(section, orientation, role);
+}
+
+QString trimCSV(QString item){
+    if((!item.isEmpty())&&(item[0] == QChar(34)))
+        item.remove(0,1);
+    if((!item.isEmpty())&&(!item.isNull())&(item[item.count()-1] == QChar(34)))
+        item.remove(item.count()-1,1);
+    if(!item.isEmpty())
+        item = item.replace("\"\"","\"");
+    return item;
+
+}
+
+void BDData::CSVRead(QString _file)
+{
+    emit beginResetModel();
+    if(cols!=0){
         cols=0;rows=0; data1.clear();column_name.clear();type_data.clear();
     }
+    QFile file(_file);
+    if (!file.open(QIODevice::ReadOnly))
     {
-    //file_name1="/home/student/qt_project/convec/basa.csv";
-    QFile file(file_name1);
-       if (!file.open(QIODevice::ReadOnly))
-       {
-         //  QMessageBox::critical(,tr("Error"),tr("Could not open file"));
-           qDebug()<<"error from open file"<<endl;;
-           return;
-       }
-       QTextStream in(&file);
-      QString col_name= in.readLine();
-
-      for (QString item : col_name.split(";")) {
-                      column_name.append(item);
-
-                      cols++;
-                  //    qDebug()<<item<<cols;
-      }
-      while (!in.atEnd())
-            {
-                // ... построчно
-                QString line = in.readLine();
-                // Добавляем в модель по строке с элементами
-              //  QList<QStandardItem *> standardItemsList;
-                QList<QString> temp;
-               // int k=-1;
-                // учитываем, что строка разделяется точкой с запятой на колонки
-                for (QString item : line.split(";")) {
-                    //if(k==cols+1)k=0; else k++;
-                //    data1[1][k].append(item);
-                    temp.append(item);
-                //            qDebug()<<item;
-                }
-                data1.append(temp); temp.clear();
-                qDebug()<<data1[rows];
-               // csvModel->insertRow(csvModel->rowCount(), standardItemsList);
-          rows++;
-      }
-                  // for(int i=0;i<5;i++)   qDebug()<<column_name[i];
-
-        //   qDebug()<<rows;
-       file.close();
+        //  QMessageBox::critical(,tr("Error"),tr("Could not open file"));
+        qDebug()<<"error from open file"<<endl;;
+        return;
     }
-   // else qDebug()<<"also data is in prog";
+
+    QTextStream in(&file);
+    bool Quote = false;
+    QList<QString> ItemList;
+    QString item = "";
+
+    QString line(in.readLine().simplified());
+    int count = line.count();
+    for (int i = 0;i<count;i++){
+        if (line[i] == QChar(34)){
+            Quote = (Quote) ? false : true;
+        }
+        if ((Quote != true)&(line[i] == _separator)){
+            column_name.append(trimCSV(item));
+            cols++;
+            item = "";
+        }else{
+            item += line[i];
+        }
+        if ((count-1 == i)&(Quote != true)){
+            item = trimCSV(item);
+            if (item != ""){
+                column_name.append(item);
+                cols++;}
+            item = "";
+        }
+    }
+    qDebug()<<column_name;
+    {
+        while(!in.atEnd()){
+            QString line(in.readLine().simplified());
+            int count = line.count();
+            rows++;
+            //  qDebug()<<rows;
+            for (int i = 0;i<count;i++){
+                if (line[i] == QChar(34)){
+                    Quote = (Quote) ? false : true;
+                }
+                if ((Quote != true)&(line[i] == _separator)){
+                    ItemList.append(trimCSV(item));
+                    item = "";
+                }else{
+                    item += line[i];
+                }
+
+                if ((count-1 == i)&(Quote != true)){
+                    item = trimCSV(item);
+                    if (item != "")
+                        ItemList.append(item);
+                    //   _lines_list.append(ItemList);
+                    data1.append(ItemList);
+                    qDebug()<<ItemList;
+                    ItemList.clear();
+                    item = "";
+                }
+            }
+
+        }
+    }
+    file.close();
+    emit endResetModel();
+}
+
+QString get_elem(QString elem){
+    elem.replace("\"","\"\"");
+    if (elem.contains('"'))
+        return "\""+elem+"\"";
+    if (elem.contains(';'))
+        return "\""+elem+"\"";
+    if(elem.contains('/'))
+        return "\""+elem+"\"";
+    if(elem.contains("<<"))
+        return "\""+elem+"\"";
+    if(elem.contains("\n"))
+        return "\""+elem+"\"";
+    if(elem.contains(", "))
+        return "\""+elem+"\"";
+    return elem;
 }
 
 void BDData::output_in_csv(QString filename){
     if(cols==0){qDebug()<<"No data in prog";}
-   /* QString name="";
-    for (int i=0;i<cols;i++)
-    name+=column_name[i];*/
-    //filename="/home/student/qt_project/convec/basa_out.csv"; //delete
-    QFile file(filename); //заменить на filename
+    //  opred_data_type();
+    QFile file(filename);
     if (file.open(QIODevice::WriteOnly))
     {
         QTextStream text_stream(&file);
         QStringList str;
         for(int k=0;k<cols;k++){
-            str<<column_name[k];
+            str<<get_elem(column_name[k]);
         }
         text_stream<<str.join(';')+"\n";
         for (int i=0;i<rows;i++)
         {
             str.clear();
             for (int j =0;j<cols;j++){
-                QList<QString> temp;
-            temp=data1[i];
-                str<<temp[j];
-
+                str<<get_elem(data1[i][j]);//temp[j];
             }
             text_stream<<str.join(';')+"\n";
         }
@@ -135,38 +183,58 @@ void BDData::output_in_csv(QString filename){
     else qDebug()<<"error open file to write";
 }
 
-/*void BDData::opred_data_type() //INTEGER -> REAL -> TEXT
+void BDData::opred_data_type() //INTEGER -> REAL -> TEXT
 {
-QList <QString>temp,d;bool qw[cols];
-for (int i=0;i<cols;i++){
-    temp.append("TEXT");
-    type_data.append("INTEGER");
-    qw[i]=false;
-}
-for (int i=0;i<rows;i++)
-    for(int j=0;j<cols;j++)
-    {
-        d.clear();
-        d=data1[i];
-        bool flag;
-        d[j].toInt(&flag);
-        if(flag) temp[j]="INTEGER";
-        else {d[j].toDouble(&flag);
-            if(flag) {temp[j]="REAL";qw[j]=true;}
-            else {temp[j]="TEXT"; type_data[j]="TEXT";}
+    QList <QString>temp,d;bool qw[cols];
+    for (int i=0;i<cols;i++){
+        temp.append("TEXT");
+        type_data.append("INTEGER");
+        qw[i]=false;
     }
-for(int i=0;i<cols;i++)
-{
-    if(qw[i] &&(type_data[i]!="TEXT")) type_data[i]="REAL";
-   // else if(type_data[i]!="TEXT") type_data[i]="INTEGER";
+    /* for (int i=0;i<rows;i++)
+        for(int j=0;j<cols;j++)
+        {
+            d.clear();
+            d=data1[i];
+            bool flag;
+            d[j].toInt(&flag);
+            if(flag) temp[j]="INTEGER";
+            else {
+                d[j].toDouble(&flag);
+                if(flag) {temp[j]="REAL";qw[j]=true;}
+                else {temp[j]="TEXT"; type_data[j]="TEXT";}
+            }
+            for(int i=0;i<cols;i++)
+            {
+                if(qw[i] &&(type_data[i]!="TEXT")) type_data[i]="REAL";
+                // else if(type_data[i]!="TEXT") type_data[i]="INTEGER";
+            }
+        }*/
+    for (int j=0;j<cols;j++)
+        for (int i=0;i<rows;i++)
+        {
+            bool flag;
+            data1[i][j].toInt(&flag);
+            if(flag) temp[j]="INTEGER";
+            else
+            {
+                data1[i][j].toDouble(&flag);
+                if(flag) {temp[j]="REAL";qw[j]=true;}
+                else {temp[j]="TEXT"; type_data[j]="TEXT";break;}
+            }
+        }
+    for(int i=0;i<cols;i++)
+    {
+        if(qw[i] &&(type_data[i]!="TEXT")) type_data[i]="REAL";
+        // else if(type_data[i]!="TEXT") type_data[i]="INTEGER";
+    }
+    //qDebug()<<temp;
+    qDebug()<<type_data;
 }
-}
-qDebug()<<temp;
-qDebug()<<type_data;
-}*/
 
-void BDData::load_from_sql(QString filename, QString name_of_table)
+void BDData::load_from_sql1(QString filename, QString name_of_table)
 {
+
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName(filename);
     if( !db.open() ) {
@@ -199,10 +267,10 @@ void BDData::load_from_sql(QString filename, QString name_of_table)
     countRows.last();
     qDebug() << countRows.value(countRows.at()).toString();
     rows = countRows.value(countRows.at()).toInt();
-    cout << rows;
+    //cout << rows;
     QSqlQuery query("SELECT * FROM " + name_of_table);
 
-    beginInsertRows(QModelIndex(), 0, rows-1);
+    emit beginInsertRows(QModelIndex(), 0, rows-1);
     while (query.next())
     {
         for (int j = 0; j < cols; j++)
@@ -210,14 +278,15 @@ void BDData::load_from_sql(QString filename, QString name_of_table)
               data1.append(temp);
               temp.clear();
      }
-     endInsertRows();
+     emit endInsertRows();
 
      db.close();
      return ;
 }
 
-void BDData::output_in_sql(QString filename, QString name_of_table)
+void BDData::output_in_sql1(QString filename, QString name_of_table)
 {
+    opred_data_type();
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName(filename);
     if (!db.open())
@@ -225,54 +294,65 @@ void BDData::output_in_sql(QString filename, QString name_of_table)
         qDebug() << "Cannot open database:" + db.lastError().text();
         return;
     }
+    QSqlRecord columns = db.record(name_of_table);
 
-    QSqlQuery query;
+    if (!columns.isEmpty()) { //create table if not it
+        QSqlQuery query2;
+        if(!query2.exec( "DROP TABLE '" +name_of_table+"'") )
+        { //error of create
+            qDebug() << "DataBase: error of delete table" ;
+            qDebug() << query2.lastError().text();
+            return;
+        }
+    }
+    //PRIMARY KEY NOT NULL
+    QSqlQuery queru;
     QString str;
-    str = "CREATE TABLE " + name_of_table + "( ";
-    str += column_name[0] + " VARCHAR(255) "+"PRIMARY KEY NOT NULL, ";
+    str = "CREATE TABLE "+ name_of_table + "( ";
+    str += "\'" + column_name[0] + "\' " + type_data[0] +" , ";
     for (int j = 1; j < cols-1; j++)
-        str += column_name[j] + " VARCHAR(255), ";
-    str += column_name[cols-1] + " VARCHAR(255)" +" );";
+        str += "\'" + column_name[j] + "\' " + type_data[j]+", ";
+    str += "\'" + column_name[cols-1] + "\' " + type_data[cols-1] +" );";
     qDebug() << str;
-    if (!query.exec(str)) {
+    if (!queru.exec(str)) {
         qDebug() << "Unable to create a table";
     }
 
+    QSqlQuery query;
     QString strt;
     for (int i = 0; i < rows; i++)
     {
+    db.transaction();
     strt = "INSERT INTO " + name_of_table+" (";
     for (int j = 0; j < cols-1; j++)
-        strt += column_name[j] + ", ";
-    strt += column_name[cols-1] + ")" + " VALUES (";
+        strt += "\'" + column_name[j] + "\'" + ", ";
+    strt += "\'" + column_name[cols-1] + "\'" + ")" + " VALUES (";
 
-
-    strt += "\'" + data1[i][0] + "\'" + ", ";
-    for (int j = 1; j < cols-1; j++)
-        strt += "\'" + data1[i][j] + "\'" + ", ";
-    strt += "\'" + data1[i][cols-1]+ "\'" + ");";
+    if(type_data[0]=="TEXT")
+        strt += "'" + data1[i][0] + "'" + ", ";
+    else
+        strt += data1[i][0] + ", ";
+    //strt += "'" + data1[i][0] + "'" + ", ";
+    for (int j = 1; j < cols-1; j++){
+        if(type_data[j]=="TEXT")
+        //if (data1[i][j] != "")
+            strt += "'" + data1[i][j] + "'" + ", ";
+        else
+            strt = strt  + data1[i][j]  + ", ";
+    }
+        //qDebug() << data1[i][j] <<" , ";}
+    if(type_data[cols-1]=="TEXT")
+        strt += "'" + data1[i][cols-1]+ "'" + ");";
+    else
+        strt +=data1[i][cols-1] + ");";
     qDebug() << strt;
     if (!query.exec(strt)) {
         qDebug() << "Unable to do insert operation";
     }
+    db.commit();
     }
-
-
 
     db.close();
 }
-QList<QString> BDData::get_column_name(){
-    return column_name;
-}
 
-QList<QList<QString>> BDData::get_data(){
-    return data1;
-}
 
-int BDData::get_row(){
-    return rows;
-}
-
-int BDData::get_col(){
-    return cols;
-}
